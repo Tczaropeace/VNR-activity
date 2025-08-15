@@ -7,7 +7,7 @@ from utils.parser import parse_pdf_bytes
 # Page configuration
 st.set_page_config(
     page_title="PDF Sentence Extractor",
-    page_icon=st.set_page_config(page_icon="images/IEP icon.jpg")
+    page_icon="images/IEP icon.jpg",
     layout="centered"
 )
 
