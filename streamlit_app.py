@@ -34,15 +34,6 @@ def main():
     )
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # Demo data button for testing
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        if st.button("Use Demo Data"):
-            st.session_state.upload_files = create_demo_files()
-            st.session_state.processing_complete = False
-            st.session_state.processing_results = []
-            st.rerun()
-    
     # Update session state with uploaded files
     if uploaded_files:
         st.session_state.upload_files = uploaded_files
@@ -56,8 +47,6 @@ def main():
             if hasattr(file, 'size'):  # Real uploaded file
                 file_size = format_file_size(file.size)
                 st.write(f"**{file.name}** ({file_size})")
-            else:  # Demo file
-                st.write(f"**{file['name']}** ({file['size']})")
         
         # Confirm & Extract button
         if st.button("Extract Sentences", type="primary", use_container_width=True):
@@ -66,14 +55,6 @@ def main():
     # Show results if processing is complete
     if st.session_state.processing_complete and st.session_state.processing_results:
         display_results()
-
-def create_demo_files() -> List[Dict[str, Any]]:
-    """Create demo file objects for testing purposes."""
-    return [
-        {'name': 'sample_document_1.pdf', 'size': '1.2 MB', 'bytes': b'demo_content_1'},
-        {'name': 'report_2024.pdf', 'size': '0.8 MB', 'bytes': b'demo_content_2'},
-        {'name': 'meeting_notes.pdf', 'size': '0.5 MB', 'bytes': b'demo_content_3'}
-    ]
 
 def format_file_size(size_bytes: int) -> str:
     """Format file size in human readable format."""
@@ -120,7 +101,7 @@ def process_files():
     st.markdown("### Processing Files")
     
     for i, file in enumerate(files):
-        # Determine file properties based on type (real upload vs demo)
+        # Determine file properties based on type (real upload)
         if hasattr(file, 'read'):  # Real uploaded file
             file_name = file.name
             try:
@@ -129,9 +110,6 @@ def process_files():
             except Exception as e:
                 file_bytes = b''
                 file_name = getattr(file, 'name', f'unknown_file_{i}')
-        else:  # Demo file
-            file_name = file['name']
-            file_bytes = file['bytes']
         
         # Generate unique filename
         unique_name = get_unique_filename(file_name, processed_names)
