@@ -13,7 +13,7 @@ st.set_page_config(
 
 def main():
     """Main Streamlit application entry point."""
-    st.title("📄 PDF Activity Extractor")
+    st.title("PDF Activity Extractor")
     st.markdown("Upload multiple PDF files to extract activities and download results as Excel.")
     
     # Initialize session state
@@ -70,7 +70,7 @@ def main():
     
     # Display uploaded files
     if st.session_state.upload_files:
-        st.subheader("📁 Uploaded Files")
+        st.subheader("Uploaded Files")
         for i, file in enumerate(st.session_state.upload_files):
             if hasattr(file, 'size'):  # Real uploaded file
                 file_size = format_file_size(file.size)
@@ -79,7 +79,7 @@ def main():
                 st.write(f"**{file['name']}** ({file['size']})")
         
         # Confirm & Extract button
-        if st.button("🚀 Confirm & Extract", type="primary", use_container_width=True):
+        if st.button("Extract", type="primary", use_container_width=True):
             process_files()
     
     # Show results if processing is complete
@@ -135,7 +135,7 @@ def process_files():
     results = []
     processed_names = []
     
-    st.markdown("### 🔄 Processing Files")
+    st.markdown("### Processing Files")
     
     for i, file in enumerate(files):
         # Determine file properties based on type (real upload vs demo)
@@ -156,7 +156,7 @@ def process_files():
         processed_names.append(unique_name)
         
         # Update status
-        status_placeholder.write(f"📝 Processing: **{unique_name}** ({i+1}/{total_files})")
+        status_placeholder.write(f"Processing: **{unique_name}** ({i+1}/{total_files})")
         
         try:
             with st.spinner(f"Parsing {unique_name}..."):
@@ -194,7 +194,7 @@ def process_files():
             progress_bar.progress(progress)
     
     # Complete processing
-    status_placeholder.write("✅ **Processing Complete!**")
+    status_placeholder.write(" **Processing Complete!**")
     st.session_state.processing_results = results
     st.session_state.processing_complete = True
 
@@ -202,7 +202,7 @@ def display_results():
     """Display processing results and provide download option."""
     results = st.session_state.processing_results
     
-    st.markdown("### 📊 Results Summary")
+    st.markdown("### Results Summary")
     
     # Calculate summary statistics
     total_activities = len(results)
@@ -223,14 +223,14 @@ def display_results():
     
     # Show preview of results
     if results:
-        st.markdown("### 📋 Preview (First 10 Rows)")
+        st.markdown("### Preview (First 10 Rows)")
         df_preview = pd.DataFrame(results).head(10)
         st.dataframe(df_preview, use_container_width=True)
         
         # Create and offer download
         excel_buffer = create_excel_download(results)
         
-        st.markdown("### 💾 Download Results")
+        st.markdown("### Download Results")
         st.download_button(
             label="📥 Download XLSX",
             data=excel_buffer,
