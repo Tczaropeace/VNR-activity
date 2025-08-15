@@ -106,17 +106,22 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
             print(f"📝 Found {len(sentences)} potential sentences on page {page_num}")
             
             for sentence in sentences:
-                if len(sentence.strip()) < 10:  # Skip very short fragments
+                print(f"🔍 Evaluating sentence (length {len(sentence)}): '{sentence[:100]}...'")
+                
+                if len(sentence.strip()) < 5:  # Reduced from 10 to 5 for testing
+                    print(f"❌ Skipping short sentence: '{sentence[:50]}'")
                     continue
                     
+                # TEMPORARILY DISABLE GARBAGE DETECTION FOR DEBUGGING
                 # Apply sentence-level quality check
-                is_sentence_garbage = is_sentence_garbage(sentence)
-                
-                if is_sentence_garbage:
-                    print(f"🗑️ Skipping garbage sentence: '{sentence[:50]}...'")
-                    continue  # Skip this sentence but keep processing others
+                # sentence_is_garbage = is_sentence_garbage(sentence)
+                # 
+                # if sentence_is_garbage:
+                #     print(f"🗑️ Skipping garbage sentence: '{sentence[:50]}...'")
+                #     continue  # Skip this sentence but keep processing others
                 
                 # This is a valid sentence
+                print(f"✅ Adding valid sentence: '{sentence[:50]}...'")
                 all_sentences.append({
                     'file_name': file_name,
                     'activity_index': sentence_index,
@@ -304,7 +309,10 @@ def extract_sentences_from_text(text: str) -> List[str]:
     Returns:
         List of cleaned sentences
     """
+    print(f"📝 Starting sentence extraction from {len(text)} characters")
+    
     if not text or not text.strip():
+        print("❌ Empty text provided")
         return []
     
     # Unicode normalization
@@ -358,11 +366,16 @@ def extract_sentences_from_text(text: str) -> List[str]:
     text = re.sub(r'\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b', r'\1DECIMALDOT\2DECIMALDOT\3', text)
     
     # Now split into potential sentences - improved regex
+    print(f"🔄 Splitting text into sentences...")
     sentence_boundaries = re.split(r'[.!?]+(?=\s|\n|$)', text)
+    print(f"📊 Found {len(sentence_boundaries)} potential sentence boundaries")
     
     sentences = []
-    for potential_sentence in sentence_boundaries:
+    for i, potential_sentence in enumerate(sentence_boundaries):
+        print(f"🔍 Processing boundary {i+1}: '{potential_sentence[:50]}...'")
+        
         if not potential_sentence.strip():
+            print(f"❌ Empty boundary {i+1}, skipping")
             continue
             
         # Restore all the protected periods
@@ -371,15 +384,18 @@ def extract_sentences_from_text(text: str) -> List[str]:
         sentence = sentence.strip()
         
         if len(sentence) < 5:  # Skip very short fragments
+            print(f"❌ Boundary {i+1} too short ({len(sentence)} chars): '{sentence}'")
             continue
             
         # Handle sentences that might be missing punctuation
         if sentence and sentence[-1] not in '.!?':
             sentence += '.'
             
+        print(f"✅ Valid sentence {i+1}: '{sentence[:50]}...'")
         sentences.append(sentence)
     
     # Additional split for sentences separated by multiple line breaks
+    print(f"🔄 Processing {len(sentences)} sentences for line break handling...")
     additional_sentences = []
     for sentence in sentences:
         # Split on double line breaks (paragraph boundaries)
@@ -390,6 +406,12 @@ def extract_sentences_from_text(text: str) -> List[str]:
                 if part[-1] not in '.!?':
                     part += '.'
                 additional_sentences.append(part)
+    
+    print(f"✅ Final sentence extraction complete: {len(additional_sentences)} sentences")
+    
+    # Show first few sentences for debugging
+    for i, sent in enumerate(additional_sentences[:3]):
+        print(f"📄 Sample sentence {i+1}: '{sent[:80]}...'")
     
     return additional_sentences
 
@@ -498,3 +520,4 @@ def validate_sentence_structure(sentence_dict: Dict[str, Any]) -> bool:
         return False
     
     return True
+    
