@@ -14,6 +14,7 @@ Features
 - Lightweight dependencies for fast deployment
 
 OCR Garbage Detection
+
 The app uses lightweight heuristics to detect OCR garbage text:
 - Excessive consecutive consonants (e.g., `lieka;ofn;aodfnouaihdfao`)
 - Low ratio of alphabetic to total characters
