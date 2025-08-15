@@ -60,7 +60,7 @@ def main():
                 st.write(f"**{file['name']}** ({file['size']})")
         
         # Confirm & Extract button
-        if st.button("Confirm and Extract Sentences", type="primary", use_container_width=True):
+        if st.button("Extract Sentences", type="primary", use_container_width=True):
             process_files()
     
     # Show results if processing is complete
