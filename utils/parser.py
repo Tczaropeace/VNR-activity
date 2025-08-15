@@ -441,47 +441,6 @@ def clean_sentence_text(sentence: str) -> str:
     
     return sentence
 
-def create_demo_sentences(file_name: str) -> List[Dict[str, Any]]:
-    """
-    Create demo sentences when PDF processing is not available.
-    
-    Used as fallback when pdfplumber is not installed.
-    """
-    document_name = file_name.rsplit('.', 1)[0]
-    
-    # Generate different demo sentences based on filename
-    if 'report' in file_name.lower():
-        demo_sentences = [
-            "This is the executive summary of our quarterly report.",
-            "Key findings indicate a 15% increase in performance metrics.",
-            "Recommendations for next quarter are outlined in section 4."
-        ]
-    elif 'meeting' in file_name.lower():
-        demo_sentences = [
-            "The meeting was called to order at 9:00 AM.",
-            "Discussion focused on project timeline and resource allocation.",
-            "Action items were assigned to respective team members."
-        ]
-    else:
-        demo_sentences = [
-            f"This is the first sentence extracted from {document_name}.",
-            f"The document {file_name} contains multiple pages of content.",
-            f"Sentence extraction completed for {document_name}."
-        ]
-    
-    results = []
-    for i, sentence in enumerate(demo_sentences):
-        results.append({
-            'file_name': file_name,
-            'activity_index': i,
-            'activity_text': sentence,
-            'page_number': i + 1,  # Spread across different pages
-            'document_name': document_name,
-            'error': None
-        })
-    
-    return results
-
 def validate_sentence_structure(sentence_dict: Dict[str, Any]) -> bool:
     """
     Validate that a sentence dictionary has the required structure.
