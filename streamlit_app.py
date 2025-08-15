@@ -116,8 +116,6 @@ def process_files():
     results = []
     processed_names = []
     
-    st.markdown("### Processing Files")
-    
     for i, file in enumerate(files):
         # Determine file properties based on type (real upload vs demo)
         if hasattr(file, 'read'):  # Real uploaded file
@@ -213,7 +211,7 @@ def display_results():
         
         st.markdown("### Download Results")
         st.download_button(
-            label="📥 Download XLSX",
+            label="Download Excel Spreadsheet",
             data=excel_buffer,
             file_name="pdf_activity_extraction_results.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
