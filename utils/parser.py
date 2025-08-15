@@ -327,7 +327,7 @@ def extract_sentences_from_text(text: str) -> List[str]:
         'M\.D', 'B\.A', 'M\.A', 'M\.S', 'B\.S', 'U\.S', 'U\.K', 'U\.N'
     ]
     for abbr in abbreviations:
-        text = re.sub(f r'\b{abbr}\. ', f'{abbr}DOTPLACEHOLDER ', text, flags=re.IGNORECASE)
+        text = re.sub(rf'\b{abbr}\. ', f'{abbr}DOTPLACEHOLDER ', text, flags=re.IGNORECASE)
     
     # 2. Numbers with decimals - comprehensive patterns
     # Simple decimals: 1.5, 3.14, 0.75, etc.
@@ -343,7 +343,7 @@ def extract_sentences_from_text(text: str) -> List[str]:
     ]
     for unit in decimal_units:
         # Handle patterns like "1.5 million", "3.14 percent", etc.
-        text = re.sub(f r'\b(\d+)DECIMALDOT(\d+)\s+{unit}\b', f r'\1DECIMALDOT\2 {unit}', text, flags=re.IGNORECASE)
+        text = re.sub(rf'\b(\d+)DECIMALDOT(\d+)\s+{unit}\b', rf'\1DECIMALDOT\2 {unit}', text, flags=re.IGNORECASE)
     
     # 3. Ordinal numbers: 1st, 2nd, 3rd, etc. (though these use . less commonly)
     text = re.sub(r'\b(\d+)(st|nd|rd|th)\.', r'\1\2DOTPLACEHOLDER', text)
@@ -357,8 +357,8 @@ def extract_sentences_from_text(text: str) -> List[str]:
     # 6. Dates in some formats: 1.5.2023, etc. (though less common)
     text = re.sub(r'\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b', r'\1DECIMALDOT\2DECIMALDOT\3', text)
     
-    # Now split into potential sentences
-    sentence_boundaries = re.split(r'[.!?]+[\s\n]+', text)
+    # Now split into potential sentences - improved regex
+    sentence_boundaries = re.split(r'[.!?]+(?=\s|\n|$)', text)
     
     sentences = []
     for potential_sentence in sentence_boundaries:
