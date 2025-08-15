@@ -95,36 +95,37 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
                 print(f"⚠️ Page {page_num} is empty, skipping")
                 continue
             
-            # OCR GARBAGE DETECTION OCCURS HERE
-            if is_ocr_garbage(page_text):
-                print(f"🗑️ OCR garbage detected on page {page_num}")
-                # Flag OCR garbage but continue processing
+            # Check if entire page is OCR garbage (very conservative)
+            page_is_garbage = is_ocr_garbage(page_text)
+            if page_is_garbage:
+                print(f"🗑️ Entire page {page_num} appears to be OCR garbage")
+                # Still try to extract sentences, but flag them
+                
+            # Extract sentences from page text regardless of OCR garbage detection
+            sentences = extract_sentences_from_text(page_text)
+            print(f"📝 Found {len(sentences)} potential sentences on page {page_num}")
+            
+            for sentence in sentences:
+                if len(sentence.strip()) < 10:  # Skip very short fragments
+                    continue
+                    
+                # Apply sentence-level quality check
+                is_sentence_garbage = is_sentence_garbage(sentence)
+                
+                if is_sentence_garbage:
+                    print(f"🗑️ Skipping garbage sentence: '{sentence[:50]}...'")
+                    continue  # Skip this sentence but keep processing others
+                
+                # This is a valid sentence
                 all_sentences.append({
                     'file_name': file_name,
                     'activity_index': sentence_index,
-                    'activity_text': f'OCR garbage detected on page {page_num}',
+                    'activity_text': clean_sentence_text(sentence),
                     'page_number': page_num,
                     'document_name': file_name.rsplit('.', 1)[0],
-                    'error': 'OCR garbage detected - text may be unreliable'
+                    'error': 'Possible OCR issues on page' if page_is_garbage else None
                 })
                 sentence_index += 1
-                continue
-            
-            # Extract and clean sentences from page text
-            sentences = extract_sentences_from_text(page_text)
-            print(f"📝 Found {len(sentences)} sentences on page {page_num}")
-            
-            for sentence in sentences:
-                if len(sentence.strip()) >= 10:  # Minimum sentence length
-                    all_sentences.append({
-                        'file_name': file_name,
-                        'activity_index': sentence_index,
-                        'activity_text': clean_sentence_text(sentence),
-                        'page_number': page_num,
-                        'document_name': file_name.rsplit('.', 1)[0],
-                        'error': None
-                    })
-                    sentence_index += 1
         
         print(f"✅ Total sentences extracted: {len(all_sentences)}")
         
@@ -206,59 +207,96 @@ def extract_text_with_pdfplumber(pdf_bytes: bytes) -> List[str]:
         print(f"❌ PDF extraction failed: {str(e)}")
         raise Exception(f"PDF extraction failed: {str(e)}")
 
+def is_sentence_garbage(sentence: str) -> bool:
+    """
+    Lightweight sentence-level garbage detection.
+    
+    Filters out obviously corrupted individual sentences while preserving
+    most valid content. Much more conservative than page-level detection.
+    
+    Args:
+        sentence: Individual sentence to check
+        
+    Returns:
+        bool: True if this specific sentence appears to be garbage
+    """
+    if not sentence or len(sentence.strip()) < 5:
+        return True
+    
+    clean_sentence = sentence.lower().strip()
+    
+    # Very conservative checks for individual sentences
+    
+    # Check 1: Sentence is mostly non-alphabetic characters
+    alpha_chars = sum(1 for c in clean_sentence if c.isalpha())
+    total_chars = len(clean_sentence.replace(' ', ''))
+    if total_chars > 10 and alpha_chars / total_chars < 0.3:
+        return True
+    
+    # Check 2: Sentence has extreme consonant clusters (8+ consecutive)
+    extreme_consonants = re.findall(r'[bcdfghjklmnpqrstvwxyz]{8,}', clean_sentence)
+    if len(extreme_consonants) > 0:
+        return True
+    
+    # Check 3: Sentence is mostly repeated characters
+    if len(set(clean_sentence.replace(' ', ''))) < 3 and len(clean_sentence) > 10:
+        return True
+    
+    # Check 4: Sentence has no vowels at all (very rare in real text)
+    if alpha_chars > 5 and not any(c in 'aeiou' for c in clean_sentence):
+        return True
+    
+    return False  # Default to keeping sentences
+
 def is_ocr_garbage(text: str) -> bool:
     """
-    Simple yet robust OCR garbage detection using heuristics.
+    Much more conservative OCR garbage detection.
     
-    Detects nonsensical text sequences that indicate OCR failures.
-    Uses lightweight pattern matching instead of complex ML approaches.
+    Only flags extremely obvious OCR garbage to avoid dismissing valid content.
+    Uses very strict thresholds to minimize false positives.
     
     Args:
         text: Text to check for OCR garbage
         
     Returns:
-        bool: True if text appears to be OCR garbage
+        bool: True only if text is very obviously OCR garbage
     """
-    if not text or len(text.strip()) < 20:
+    if not text or len(text.strip()) < 50:  # Increased minimum length
         return False
     
     # Convert to lowercase for analysis
     clean_text = text.lower().strip()
     
-    # Heuristic 1: Too many consecutive consonants (like "lieka;ofn;aodfnouaihdfao")
-    consonant_runs = re.findall(r'[bcdfghjklmnpqrstvwxyz]{6,}', clean_text)
-    if len(consonant_runs) > 3:
+    # Much more conservative heuristics - only flag extreme cases
+    
+    # Heuristic 1: Extremely long consonant runs (10+ chars) - very rare in real text
+    extreme_consonant_runs = re.findall(r'[bcdfghjklmnpqrstvwxyz]{10,}', clean_text)
+    if len(extreme_consonant_runs) > 1:  # Allow one, flag if multiple
         return True
     
-    # Heuristic 2: Too many non-alphabetic characters relative to text
+    # Heuristic 2: Very low alphabetic ratio (< 40%) - most text is at least 40% letters
     alpha_chars = sum(1 for c in clean_text if c.isalpha())
     total_chars = len(clean_text.replace(' ', ''))
-    if total_chars > 0 and alpha_chars / total_chars < 0.6:
+    if total_chars > 100 and alpha_chars / total_chars < 0.4:  # More lenient threshold
         return True
     
-    # Heuristic 3: Excessive punctuation or special characters in sequence
-    special_runs = re.findall(r'[^a-zA-Z0-9\s]{4,}', clean_text)
-    if len(special_runs) > 2:
+    # Heuristic 3: Extremely high ratio of numbers/symbols (> 70%)
+    non_alpha_non_space = sum(1 for c in clean_text if not c.isalpha() and not c.isspace())
+    if len(clean_text) > 100 and non_alpha_non_space / len(clean_text) > 0.7:
         return True
     
-    # Heuristic 4: Very low vowel ratio (OCR often mangles vowels)
+    # Heuristic 4: Almost no vowels at all (< 8%) - real text always has vowels
     vowels = sum(1 for c in clean_text if c in 'aeiou')
-    if alpha_chars > 50 and vowels / alpha_chars < 0.15:
+    if alpha_chars > 100 and vowels / alpha_chars < 0.08:  # Much more lenient
         return True
     
-    # Heuristic 5: Too many single-character "words"
-    words = clean_text.split()
-    single_char_words = sum(1 for word in words if len(word) == 1 and word.isalpha())
-    if len(words) > 10 and single_char_words / len(words) > 0.3:
-        return True
-    
-    return False
+    return False  # Default to keeping text
 
 def extract_sentences_from_text(text: str) -> List[str]:
     """
-    Extract individual sentences from page text with cleaning and normalization.
+    Extract individual sentences from page text with robust cleaning and normalization.
     
-    Based on the sentence extraction logic from the provided preprocessing code.
+    Handles common edge cases like abbreviations, numbers, and decimal points.
     
     Args:
         text: Raw text from PDF page
@@ -275,55 +313,85 @@ def extract_sentences_from_text(text: str) -> List[str]:
     except:
         pass
     
-    # Clean whitespace and line breaks
-    text = re.sub(r' +', ' ', text)  # Multiple spaces to single space
+    # Clean whitespace and line breaks (more conservative)
+    text = re.sub(r'[ \t]+', ' ', text)  # Multiple spaces/tabs to single space
     text = re.sub(r'\r\n|\r', '\n', text)  # Normalize line endings
-    text = re.sub(r'\n{3,}', '\n\n', text)  # Limit consecutive line breaks
+    text = re.sub(r'\n{4,}', '\n\n\n', text)  # Limit excessive line breaks but keep some
     
-    # Join broken sentences (handle line breaks that split sentences)
-    lines = [line.rstrip() for line in text.split('\n')]
-    joined_lines = []
-    current_line = ""
+    # Comprehensive protection of periods that shouldn't end sentences
     
-    for line in lines:
-        if not line.strip():
-            if current_line:
-                joined_lines.append(current_line)
-                current_line = ""
-            continue
-        
-        current_line = (current_line + " " + line) if current_line else line
-        
-        # If line ends with sentence-ending punctuation, finish the sentence
-        if line.strip()[-1:] in '.!?':
-            joined_lines.append(current_line)
-            current_line = ""
+    # 1. Common abbreviations
+    abbreviations = [
+        'Dr', 'Mr', 'Mrs', 'Ms', 'Prof', 'Inc', 'Ltd', 'Corp', 'Co', 'LLC',
+        'etc', 'vs', 'e\.g', 'i\.e', 'cf', 'viz', 'al', 'Jr', 'Sr', 'Ph\.D',
+        'M\.D', 'B\.A', 'M\.A', 'M\.S', 'B\.S', 'U\.S', 'U\.K', 'U\.N'
+    ]
+    for abbr in abbreviations:
+        text = re.sub(f r'\b{abbr}\. ', f'{abbr}DOTPLACEHOLDER ', text, flags=re.IGNORECASE)
     
-    # Add any remaining line
-    if current_line:
-        joined_lines.append(current_line)
+    # 2. Numbers with decimals - comprehensive patterns
+    # Simple decimals: 1.5, 3.14, 0.75, etc.
+    text = re.sub(r'\b(\d+)\.(\d+)\b', r'\1DECIMALDOT\2', text)
     
-    # Extract sentences from joined text
+    # Decimals followed by common units/words
+    decimal_units = [
+        'million', 'billion', 'trillion', 'thousand', 'hundred',
+        'percent', '%', 'degrees', 'inches', 'feet', 'yards', 'miles', 'km', 'meters',
+        'kg', 'lbs', 'pounds', 'tons', 'ounces', 'grams',
+        'seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years',
+        'dollars', 'cents', 'euros', 'pounds'
+    ]
+    for unit in decimal_units:
+        # Handle patterns like "1.5 million", "3.14 percent", etc.
+        text = re.sub(f r'\b(\d+)DECIMALDOT(\d+)\s+{unit}\b', f r'\1DECIMALDOT\2 {unit}', text, flags=re.IGNORECASE)
+    
+    # 3. Ordinal numbers: 1st, 2nd, 3rd, etc. (though these use . less commonly)
+    text = re.sub(r'\b(\d+)(st|nd|rd|th)\.', r'\1\2DOTPLACEHOLDER', text)
+    
+    # 4. Time formats: 1.30 PM, 14.45, etc.
+    text = re.sub(r'\b(\d{1,2})\.(\d{2})\s*(AM|PM|am|pm)\b', r'\1DECIMALDOT\2 \3', text)
+    
+    # 5. Version numbers: v1.5, version 2.3, etc.
+    text = re.sub(r'\b(v|version)\s*(\d+)\.(\d+)', r'\1 \2DECIMALDOT\3', text, flags=re.IGNORECASE)
+    
+    # 6. Dates in some formats: 1.5.2023, etc. (though less common)
+    text = re.sub(r'\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b', r'\1DECIMALDOT\2DECIMALDOT\3', text)
+    
+    # Now split into potential sentences
+    sentence_boundaries = re.split(r'[.!?]+[\s\n]+', text)
+    
     sentences = []
-    full_text = '\n'.join(joined_lines)
-    
-    # Split into paragraphs and then sentences
-    for paragraph in full_text.split('\n\n'):
-        if not paragraph.strip():
+    for potential_sentence in sentence_boundaries:
+        if not potential_sentence.strip():
             continue
+            
+        # Restore all the protected periods
+        sentence = potential_sentence.replace('DOTPLACEHOLDER', '.')
+        sentence = sentence.replace('DECIMALDOT', '.')
+        sentence = sentence.strip()
         
-        # Split paragraph into sentences
-        sentence_parts = re.split(r'[.!?]+', paragraph)
-        
-        for part in sentence_parts:
-            sentence = part.strip()
-            if len(sentence) >= 10:  # Minimum meaningful sentence length
-                # Ensure sentence ends with punctuation
-                if sentence and sentence[-1] not in '.!?':
-                    sentence += '.'
-                sentences.append(sentence)
+        if len(sentence) < 5:  # Skip very short fragments
+            continue
+            
+        # Handle sentences that might be missing punctuation
+        if sentence and sentence[-1] not in '.!?':
+            sentence += '.'
+            
+        sentences.append(sentence)
     
-    return sentences
+    # Additional split for sentences separated by multiple line breaks
+    additional_sentences = []
+    for sentence in sentences:
+        # Split on double line breaks (paragraph boundaries)
+        parts = sentence.split('\n\n')
+        for part in parts:
+            part = part.replace('\n', ' ').strip()  # Join line-broken sentences
+            if len(part) >= 5:
+                if part[-1] not in '.!?':
+                    part += '.'
+                additional_sentences.append(part)
+    
+    return additional_sentences
 
 def clean_sentence_text(sentence: str) -> str:
     """
