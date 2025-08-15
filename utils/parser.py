@@ -4,12 +4,20 @@ import time
 import unicodedata
 from typing import List, Dict, Any
 
-# Lightweight PDF processing
+# Lightweight PDF processing - with better error handling
+PDF_AVAILABLE = False
+PDF_ERROR = None
+
 try:
     import pdfplumber
     PDF_AVAILABLE = True
-except ImportError:
-    PDF_AVAILABLE = False
+    print("✅ pdfplumber successfully imported")
+except ImportError as e:
+    PDF_ERROR = f"pdfplumber import failed: {str(e)}"
+    print(f"❌ {PDF_ERROR}")
+except Exception as e:
+    PDF_ERROR = f"pdfplumber import error: {str(e)}"
+    print(f"❌ {PDF_ERROR}")
 
 def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
     """
@@ -32,8 +40,11 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
         - error: str | None - None on success, error message on failure
     """
     try:
+        print(f"🔄 Starting to parse {file_name}, size: {len(pdf_bytes)} bytes")
+        
         # Basic validation
         if not pdf_bytes:
+            print("❌ File is empty")
             return [{
                 'file_name': file_name,
                 'activity_index': 0,
@@ -44,13 +55,24 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
             }]
         
         if not PDF_AVAILABLE:
-            # Fallback when pdfplumber not available
-            return create_demo_sentences(file_name)
+            print(f"❌ PDF processing not available: {PDF_ERROR}")
+            # Return detailed error when pdfplumber not available
+            return [{
+                'file_name': file_name,
+                'activity_index': 0,
+                'activity_text': f'PDF processing unavailable: {PDF_ERROR}',
+                'page_number': 1,
+                'document_name': file_name.rsplit('.', 1)[0],
+                'error': f'pdfplumber not available - {PDF_ERROR}'
+            }]
+        
+        print("✅ pdfplumber available, starting text extraction")
         
         # Extract text from PDF using pdfplumber (lightweight alternative to PyMuPDF)
         pages_text = extract_text_with_pdfplumber(pdf_bytes)
         
         if not pages_text:
+            print("❌ No pages extracted")
             return [{
                 'file_name': file_name,
                 'activity_index': 0,
@@ -60,16 +82,22 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
                 'error': 'No extractable text found in PDF'
             }]
         
+        print(f"✅ Extracted text from {len(pages_text)} pages")
+        
         # Process each page and extract sentences
         all_sentences = []
         sentence_index = 0
         
         for page_num, page_text in enumerate(pages_text, 1):
+            print(f"🔍 Processing page {page_num}, text length: {len(page_text)}")
+            
             if not page_text.strip():
+                print(f"⚠️ Page {page_num} is empty, skipping")
                 continue
             
             # OCR GARBAGE DETECTION OCCURS HERE
             if is_ocr_garbage(page_text):
+                print(f"🗑️ OCR garbage detected on page {page_num}")
                 # Flag OCR garbage but continue processing
                 all_sentences.append({
                     'file_name': file_name,
@@ -84,6 +112,7 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
             
             # Extract and clean sentences from page text
             sentences = extract_sentences_from_text(page_text)
+            print(f"📝 Found {len(sentences)} sentences on page {page_num}")
             
             for sentence in sentences:
                 if len(sentence.strip()) >= 10:  # Minimum sentence length
@@ -97,7 +126,10 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
                     })
                     sentence_index += 1
         
+        print(f"✅ Total sentences extracted: {len(all_sentences)}")
+        
         if not all_sentences:
+            print("❌ No valid sentences found")
             return [{
                 'file_name': file_name,
                 'activity_index': 0,
@@ -110,6 +142,7 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
         return all_sentences
         
     except Exception as e:
+        print(f"❌ Parsing failed for {file_name}: {str(e)}")
         # Return error sentence on any exception
         return [{
             'file_name': file_name,
@@ -127,33 +160,50 @@ def extract_text_with_pdfplumber(pdf_bytes: bytes) -> List[str]:
     Returns:
         List of strings, one per page
     """
+    if not PDF_AVAILABLE:
+        raise Exception(f"pdfplumber not available: {PDF_ERROR}")
+    
     try:
+        print(f"📖 Opening PDF with pdfplumber, size: {len(pdf_bytes)} bytes")
+        
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             pages_text = []
+            total_pages = len(pdf.pages)
+            print(f"📄 PDF has {total_pages} pages")
             
-            for page in pdf.pages:
+            for page_num, page in enumerate(pdf.pages):
+                print(f"📝 Processing page {page_num + 1}/{total_pages}")
                 text = ""
                 
                 # Extract regular text
                 page_text = page.extract_text()
                 if page_text:
                     text += page_text
+                    print(f"✅ Extracted {len(page_text)} characters from page {page_num + 1}")
+                else:
+                    print(f"⚠️ No text found on page {page_num + 1}")
                 
                 # Extract table content
                 try:
                     tables = page.extract_tables()
                     if tables:
+                        table_text = ""
                         for table in tables:
                             for row in table:
                                 if row:
-                                    text += "\n" + " ".join(str(cell or "") for cell in row)
-                except:
-                    pass  # Skip table extraction errors
+                                    table_text += "\n" + " ".join(str(cell or "") for cell in row)
+                        text += table_text
+                        print(f"📊 Extracted {len(table_text)} characters from tables on page {page_num + 1}")
+                except Exception as table_error:
+                    print(f"⚠️ Table extraction failed on page {page_num + 1}: {table_error}")
                 
                 pages_text.append(text)
             
+            print(f"✅ Successfully extracted text from all {total_pages} pages")
             return pages_text
+            
     except Exception as e:
+        print(f"❌ PDF extraction failed: {str(e)}")
         raise Exception(f"PDF extraction failed: {str(e)}")
 
 def is_ocr_garbage(text: str) -> bool:
