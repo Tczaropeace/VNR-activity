@@ -24,25 +24,6 @@ def main():
     if 'processing_complete' not in st.session_state:
         st.session_state.processing_complete = False
     
-    # Custom CSS for drag-and-drop card
-    st.markdown("""
-    <style>
-    .upload-card {
-        border: 2px dashed #cccccc;
-        border-radius: 10px;
-        padding: 2rem;
-        text-align: center;
-        background-color: #f8f9fa;
-        margin: 1rem 0;
-        transition: border-color 0.3s ease;
-    }
-    .upload-card:hover {
-        border-color: #007bff;
-        background-color: #f0f8ff;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
     # File upload section
     st.markdown('<div class="upload-card">', unsafe_allow_html=True)
     uploaded_files = st.file_uploader(
