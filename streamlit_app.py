@@ -27,7 +27,7 @@ def main():
     # File upload section
     st.markdown('<div class="upload-card">', unsafe_allow_html=True)
     uploaded_files = st.file_uploader(
-        "Drag and drop PDF files here or click to browse",
+        "Drag PDF files here or browse",
         type=['pdf'],
         accept_multiple_files=True,
         key="pdf_uploader"
