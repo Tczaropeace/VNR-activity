@@ -6,15 +6,15 @@ from utils.parser import parse_pdf_bytes
 
 # Page configuration
 st.set_page_config(
-    page_title="PDF Activity Extractor",
+    page_title="PDF Sentence Extractor",
     page_icon="📄",
     layout="centered"
 )
 
 def main():
     """Main Streamlit application entry point."""
-    st.title("PDF Activity Extractor")
-    st.markdown("Upload multiple PDF files to extract activities and download results as Excel.")
+    st.title("PDF Sentence Extractor")
+    st.markdown("Upload multiple PDF files to extract sentences and download results as Excel.")
     
     # Initialize session state
     if 'upload_files' not in st.session_state:
@@ -24,10 +24,29 @@ def main():
     if 'processing_complete' not in st.session_state:
         st.session_state.processing_complete = False
     
+    # Custom CSS for drag-and-drop card
+    st.markdown("""
+    <style>
+    .upload-card {
+        border: 2px dashed #cccccc;
+        border-radius: 10px;
+        padding: 2rem;
+        text-align: center;
+        background-color: #f8f9fa;
+        margin: 1rem 0;
+        transition: border-color 0.3s ease;
+    }
+    .upload-card:hover {
+        border-color: #007bff;
+        background-color: #f0f8ff;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     # File upload section
     st.markdown('<div class="upload-card">', unsafe_allow_html=True)
     uploaded_files = st.file_uploader(
-        "Drag PDF files here or browse",
+        "Drag and drop PDF files here or click to browse",
         type=['pdf'],
         accept_multiple_files=True,
         key="pdf_uploader"
@@ -60,7 +79,7 @@ def main():
                 st.write(f"**{file['name']}** ({file['size']})")
         
         # Confirm & Extract button
-        if st.button("Extract", type="primary", use_container_width=True):
+        if st.button("Confirm and Extract Sentences", type="primary", use_container_width=True):
             process_files()
     
     # Show results if processing is complete
@@ -113,8 +132,11 @@ def process_files():
     # Initialize progress tracking
     progress_bar = st.progress(0)
     status_placeholder = st.empty()
+    file_status_placeholder = st.empty()
     results = []
     processed_names = []
+    
+    st.markdown("### Processing Files")
     
     for i, file in enumerate(files):
         # Determine file properties based on type (real upload vs demo)
@@ -134,11 +156,11 @@ def process_files():
         unique_name = get_unique_filename(file_name, processed_names)
         processed_names.append(unique_name)
         
-        # Update status
+        # Update main status
         status_placeholder.write(f"Processing: **{unique_name}** ({i+1}/{total_files})")
         
         try:
-            with st.spinner(f"Parsing {unique_name}..."):
+            with st.spinner(f"Extracting sentences from {unique_name}..."):
                 # Check file size
                 if not check_file_size(file_bytes):
                     # File too large - create error entry
@@ -146,13 +168,28 @@ def process_files():
                         'file_name': unique_name,
                         'activity_index': 0,
                         'activity_text': f'File too large: {unique_name}',
+                        'page_number': 1,
+                        'document_name': unique_name.rsplit('.', 1)[0],
                         'error': 'File size exceeds 50MB limit'
                     }]
                     results.extend(error_result)
                 else:
-                    # Parse the PDF
+                    # Parse the PDF and extract sentences
+                    # SENTENCE PARSING OCCURS HERE - uses new sentence-based processing
                     parse_results = parse_pdf_bytes(file_bytes, unique_name)
                     results.extend(parse_results)
+                    
+                    # Update file status with sentence count
+                    sentence_count = len([r for r in parse_results if r.get('error') is None])
+                    error_count = len(parse_results) - sentence_count
+                    
+                    if sentence_count > 0:
+                        file_status_placeholder.write(
+                            f"**{unique_name}**: {sentence_count} sentences extracted" + 
+                            (f", {error_count} errors" if error_count > 0 else "")
+                        )
+                    else:
+                        file_status_placeholder.write(f"⚠**{unique_name}**: No sentences extracted")
                 
                 # Update progress
                 progress = (i + 1) / total_files
@@ -164,16 +201,19 @@ def process_files():
                 'file_name': unique_name,
                 'activity_index': 0,
                 'activity_text': f'Error processing: {unique_name}',
+                'page_number': 1,
+                'document_name': unique_name.rsplit('.', 1)[0],
                 'error': str(e)
             }]
             results.extend(error_result)
+            file_status_placeholder.write(f"**{unique_name}**: Processing failed")
             
             # Update progress even on error
             progress = (i + 1) / total_files
             progress_bar.progress(progress)
     
     # Complete processing
-    status_placeholder.write(" **Processing Complete!**")
+    status_placeholder.write("**Processing Complete!**")
     st.session_state.processing_results = results
     st.session_state.processing_complete = True
 
@@ -184,9 +224,9 @@ def display_results():
     st.markdown("### Results Summary")
     
     # Calculate summary statistics
-    total_activities = len(results)
-    successful_activities = len([r for r in results if r['error'] is None])
-    error_activities = total_activities - successful_activities
+    total_sentences = len(results)
+    successful_sentences = len([r for r in results if r['error'] is None])
+    error_sentences = total_sentences - successful_sentences
     unique_files = len(set(r['file_name'] for r in results))
     
     # Display summary
@@ -194,16 +234,26 @@ def display_results():
     with col1:
         st.metric("Total Files", unique_files)
     with col2:
-        st.metric("Total Activities", total_activities)
+        st.metric("Total Sentences", total_sentences)
     with col3:
-        st.metric("Successful", successful_activities)
+        st.metric("Successful", successful_sentences)
     with col4:
-        st.metric("Errors", error_activities)
+        st.metric("Errors", error_sentences)
     
     # Show preview of results
     if results:
-        st.markdown("### Preview (First 10 Rows)")
-        df_preview = pd.DataFrame(results).head(10)
+        st.markdown("### Preview (First 10 Sentences)")
+        # Create display DataFrame with only the columns we want to show
+        display_data = []
+        for r in results[:10]:
+            display_data.append({
+                'Document': r['document_name'],
+                'Page': r['page_number'],
+                'Sentence': r['activity_text'][:100] + "..." if len(r['activity_text']) > 100 else r['activity_text'],
+                'Status': 'Error' if r['error'] else 'Success'
+            })
+        
+        df_preview = pd.DataFrame(display_data)
         st.dataframe(df_preview, use_container_width=True)
         
         # Create and offer download
@@ -211,26 +261,35 @@ def display_results():
         
         st.markdown("### Download Results")
         st.download_button(
-            label="Download Excel Spreadsheet",
+            label="Download XLSX",
             data=excel_buffer,
-            file_name="pdf_activity_extraction_results.xlsx",
+            file_name="pdf_sentence_extraction_results.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
 
 def create_excel_download(results: List[Dict[str, Any]]) -> bytes:
     """Create Excel file in memory and return as bytes."""
-    # Create DataFrame from results
-    df = pd.DataFrame(results)
+    # Create DataFrame from results - only include the columns we want in output
+    output_data = []
+    for r in results:
+        output_data.append({
+            'text_sentence': r['activity_text'],
+            'page_number': r['page_number'],
+            'document_name': r['document_name'],
+            'error': r['error']  # Include error column for debugging
+        })
+    
+    df = pd.DataFrame(output_data)
     
     # Create Excel file in memory
     excel_buffer = io.BytesIO()
     
     with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
-        df.to_excel(writer, sheet_name='Activity_Extraction', index=False)
+        df.to_excel(writer, sheet_name='Sentence_Extraction', index=False)
         
         # Get the worksheet to apply formatting
-        worksheet = writer.sheets['Activity_Extraction']
+        worksheet = writer.sheets['Sentence_Extraction']
         
         # Adjust column widths
         for column in worksheet.columns:
@@ -244,7 +303,7 @@ def create_excel_download(results: List[Dict[str, Any]]) -> bytes:
                 except:
                     pass
             
-            adjusted_width = min(max_length + 2, 50)  # Cap at 50 characters
+            adjusted_width = min(max_length + 2, 80)  # Cap at 80 characters for text sentences
             worksheet.column_dimensions[column_letter].width = adjusted_width
     
     excel_buffer.seek(0)
