@@ -60,8 +60,8 @@ def main():
             file_size = format_file_size(file.size)
             st.write(f"**{file.name}** ({file_size})")
         
-        # Confirm & Extract button
-        if st.button("Confirm & Extract Sentences", type="primary", use_container_width=True):
+        # Extract button
+        if st.button("Extract Sentences", type="primary", use_container_width=True):
             process_files()
     
     # Show results if processing is complete
@@ -163,7 +163,7 @@ def process_files():
                             (f", {error_count} errors" if error_count > 0 else "")
                         )
                     else:
-                        file_status_placeholder.write(f"⚠**{unique_name}**: No sentences extracted")
+                        file_status_placeholder.write(f"**{unique_name}**: No sentences extracted")
                 
                 # Update progress
                 progress = (i + 1) / total_files
@@ -261,7 +261,7 @@ def display_results():
                     filter_for_activities()
             else:
                 st.button("Filter for Activities", disabled=True, use_container_width=True)
-                st.caption("⚠Activity classification model not available")
+                st.caption("⚠️ Activity classification model not available")
         
         # Show classification results if available
         if st.session_state.classification_complete:
