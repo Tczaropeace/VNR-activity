@@ -87,16 +87,20 @@ def main():
             with col2:
                 # Try to load the activity classification model if not loaded
                 if not st.session_state.model_loaded:
-                    model, tokenizer, success = load_activity_classifier()
-                    st.session_state.model_loaded = success
-                    if success:
-                        st.session_state.model = model
-                        st.session_state.tokenizer = tokenizer
+                    with st.spinner("Loading activity classification model..."):
+                        model, tokenizer, success = load_activity_classifier()
+                        st.session_state.model_loaded = success
+                        if success:
+                            st.session_state.model = model
+                            st.session_state.tokenizer = tokenizer
+                            st.success("Activity classification model loaded successfully!")
+                        else:
+                            st.error("Failed to load activity classification model")
                 
                 # Show filter button only if model loaded successfully
                 if st.session_state.model_loaded:
                     if st.button("🤖 Filter for Activities", use_container_width=True):
-                        filter_for_activities()
+                        filter_for_activities_with_ui()
                 else:
                     st.button("Filter for Activities", disabled=True, use_container_width=True)
                     st.caption("⚠️ Activity classification model not available")
@@ -268,8 +272,8 @@ def display_results():
         df_preview = pd.DataFrame(display_data)
         st.dataframe(df_preview, use_container_width=True)
 
-def filter_for_activities():
-    """Filter extracted sentences for activities using the ML model."""
+def filter_for_activities_with_ui():
+    """Filter extracted sentences for activities with UI progress tracking."""
     results = st.session_state.processing_results
     model = st.session_state.model
     tokenizer = st.session_state.tokenizer
@@ -283,8 +287,22 @@ def filter_for_activities():
         st.warning("No valid sentences to classify.")
         return
     
-    # Classify sentences
-    classified_results = classify_sentences(valid_sentences, model, tokenizer)
+    # Create progress tracking UI elements
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    # Classify sentences with progress info
+    status_text.text("Starting classification...")
+    classified_results, progress_info = classify_sentences(valid_sentences, model, tokenizer)
+    
+    # Update progress display (simulate since we can't get real-time updates from the function)
+    if 'error' not in progress_info:
+        progress_bar.progress(1.0)
+        status_text.text(f"Processed {progress_info.get('sentences_processed', 0)} sentences")
+    
+    # Clear progress indicators
+    progress_bar.empty()
+    status_text.empty()
     
     # Get classification summary
     summary = get_classification_summary(classified_results)
