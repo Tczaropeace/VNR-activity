@@ -11,13 +11,13 @@ PDF_ERROR = None
 try:
     import pdfplumber
     PDF_AVAILABLE = True
-    print("✅ pdfplumber successfully imported")
+    print("pdfplumber successfully imported")
 except ImportError as e:
     PDF_ERROR = f"pdfplumber import failed: {str(e)}"
-    print(f"❌ {PDF_ERROR}")
+    print(f"Error: {PDF_ERROR}")
 except Exception as e:
     PDF_ERROR = f"pdfplumber import error: {str(e)}"
-    print(f"❌ {PDF_ERROR}")
+    print(f"Error: {PDF_ERROR}")
 
 def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
     """
@@ -41,11 +41,11 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
         - error: str | None - None on success, error message on failure
     """
     try:
-        print(f"🔄 Starting to parse {file_name}, size: {len(pdf_bytes)} bytes")
+        print(f"Starting to parse {file_name}, size: {len(pdf_bytes)} bytes")
         
         # Basic validation
         if not pdf_bytes:
-            print("❌ File is empty")
+            print("File is empty")
             return [{
                 'file_name': file_name,
                 'activity_index': 0,
@@ -57,7 +57,7 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
             }]
         
         if not PDF_AVAILABLE:
-            print(f"❌ PDF processing not available: {PDF_ERROR}")
+            print(f"PDF processing not available: {PDF_ERROR}")
             return [{
                 'file_name': file_name,
                 'activity_index': 0,
@@ -68,13 +68,13 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
                 'error': f'pdfplumber not available - {PDF_ERROR}'
             }]
         
-        print("✅ pdfplumber available, starting text extraction")
+        print("pdfplumber available, starting text extraction")
         
         # Extract text from PDF using pdfplumber
         pages_text = extract_text_with_pdfplumber(pdf_bytes)
         
         if not pages_text:
-            print("❌ No pages extracted")
+            print("No pages extracted")
             return [{
                 'file_name': file_name,
                 'activity_index': 0,
@@ -85,26 +85,26 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
                 'error': 'No extractable text found in PDF'
             }]
         
-        print(f"✅ Extracted text from {len(pages_text)} pages")
+        print(f"Extracted text from {len(pages_text)} pages")
         
         # Process each page and collect all sentences first (without context)
         all_sentences_raw = []
         
         for page_num, page_text in enumerate(pages_text, 1):
-            print(f"🔍 Processing page {page_num}, text length: {len(page_text)}")
+            print(f"Processing page {page_num}, text length: {len(page_text)}")
             
             if not page_text.strip():
-                print(f"⚠️ Page {page_num} is empty, skipping")
+                print(f"Page {page_num} is empty, skipping")
                 continue
             
             # Check if entire page is OCR garbage (very conservative)
             page_is_garbage = is_ocr_garbage(page_text)
             if page_is_garbage:
-                print(f"🗑️ Entire page {page_num} appears to be OCR garbage")
+                print(f"Entire page {page_num} appears to be OCR garbage")
                 
             # Extract sentences from page text
             sentences = extract_sentences_from_text(page_text)
-            print(f"📝 Found {len(sentences)} potential sentences on page {page_num}")
+            print(f"Found {len(sentences)} potential sentences on page {page_num}")
             
             for sentence in sentences:
                 if len(sentence.strip()) < 5:
@@ -117,7 +117,7 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
                     'has_ocr_issues': page_is_garbage
                 })
         
-        print(f"📋 Collected {len(all_sentences_raw)} raw sentences across all pages")
+        print(f"Collected {len(all_sentences_raw)} raw sentences across all pages")
         
         # NOW ADD CONTEXT - Process sentences with context from surrounding sentences
         all_sentences_with_context = []
@@ -150,10 +150,10 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
                 'error': 'Possible OCR issues on page' if sent_data['has_ocr_issues'] else None
             })
         
-        print(f"✅ Total sentences with context: {len(all_sentences_with_context)}")
+        print(f"Total sentences with context: {len(all_sentences_with_context)}")
         
         if not all_sentences_with_context:
-            print("❌ No valid sentences found")
+            print("No valid sentences found")
             return [{
                 'file_name': file_name,
                 'activity_index': 0,
@@ -167,7 +167,7 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
         return all_sentences_with_context
         
     except Exception as e:
-        print(f"❌ Parsing failed for {file_name}: {str(e)}")
+        print(f"Parsing failed for {file_name}: {str(e)}")
         return [{
             'file_name': file_name,
             'activity_index': 0,
@@ -189,24 +189,24 @@ def extract_text_with_pdfplumber(pdf_bytes: bytes) -> List[str]:
         raise Exception(f"pdfplumber not available: {PDF_ERROR}")
     
     try:
-        print(f"📖 Opening PDF with pdfplumber, size: {len(pdf_bytes)} bytes")
+        print(f"Opening PDF with pdfplumber, size: {len(pdf_bytes)} bytes")
         
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             pages_text = []
             total_pages = len(pdf.pages)
-            print(f"📄 PDF has {total_pages} pages")
+            print(f"PDF has {total_pages} pages")
             
             for page_num, page in enumerate(pdf.pages):
-                print(f"📝 Processing page {page_num + 1}/{total_pages}")
+                print(f"Processing page {page_num + 1}/{total_pages}")
                 text = ""
                 
                 # Extract regular text
                 page_text = page.extract_text()
                 if page_text:
                     text += page_text
-                    print(f"✅ Extracted {len(page_text)} characters from page {page_num + 1}")
+                    print(f"Extracted {len(page_text)} characters from page {page_num + 1}")
                 else:
-                    print(f"⚠️ No text found on page {page_num + 1}")
+                    print(f"No text found on page {page_num + 1}")
                 
                 # Extract table content
                 try:
@@ -218,17 +218,17 @@ def extract_text_with_pdfplumber(pdf_bytes: bytes) -> List[str]:
                                 if row:
                                     table_text += "\n" + " ".join(str(cell or "") for cell in row)
                         text += table_text
-                        print(f"📊 Extracted {len(table_text)} characters from tables on page {page_num + 1}")
+                        print(f"Extracted {len(table_text)} characters from tables on page {page_num + 1}")
                 except Exception as table_error:
-                    print(f"⚠️ Table extraction failed on page {page_num + 1}: {table_error}")
+                    print(f"Table extraction failed on page {page_num + 1}: {table_error}")
                 
                 pages_text.append(text)
             
-            print(f"✅ Successfully extracted text from all {total_pages} pages")
+            print(f"Successfully extracted text from all {total_pages} pages")
             return pages_text
             
     except Exception as e:
-        print(f"❌ PDF extraction failed: {str(e)}")
+        print(f"PDF extraction failed: {str(e)}")
         raise Exception(f"PDF extraction failed: {str(e)}")
 
 def is_ocr_garbage(text: str) -> bool:
@@ -282,10 +282,10 @@ def extract_sentences_from_text(text: str) -> List[str]:
     Returns:
         List of cleaned sentences
     """
-    print(f"📝 Starting sentence extraction from {len(text)} characters")
+    print(f"Starting sentence extraction from {len(text)} characters")
     
     if not text or not text.strip():
-        print("❌ Empty text provided")
+        print("Empty text provided")
         return []
     
     # Unicode normalization
@@ -329,9 +329,9 @@ def extract_sentences_from_text(text: str) -> List[str]:
     text = re.sub(r'\b(v|version)\s*(\d+)\.(\d+)', r'\1 \2DECIMALDOT\3', text, flags=re.IGNORECASE)
     
     # Split into sentences
-    print(f"🔄 Splitting text into sentences...")
+    print(f"Splitting text into sentences...")
     sentence_boundaries = re.split(r'[.!?]+(?=\s|\n|$)', text)
-    print(f"📊 Found {len(sentence_boundaries)} potential sentence boundaries")
+    print(f"Found {len(sentence_boundaries)} potential sentence boundaries")
     
     sentences = []
     for i, potential_sentence in enumerate(sentence_boundaries):
@@ -363,7 +363,7 @@ def extract_sentences_from_text(text: str) -> List[str]:
                     part += '.'
                 additional_sentences.append(part)
     
-    print(f"✅ Final sentence extraction complete: {len(additional_sentences)} sentences")
+    print(f"Final sentence extraction complete: {len(additional_sentences)} sentences")
     
     return additional_sentences
 
@@ -419,3 +419,4 @@ def validate_sentence_structure(sentence_dict: Dict[str, Any]) -> bool:
             isinstance(sentence_dict['document_name'], str) and
             isinstance(sentence_dict['context'], str) and
             (sentence_dict['error'] is None or isinstance(sentence_dict['error'], str)))
+    
