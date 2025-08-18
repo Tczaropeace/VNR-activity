@@ -3,3 +3,9 @@ pandas>=2.0.0
 openpyxl>=3.1.0
 pdfplumber>=0.9.0
 Pillow>=9.0.0
+
+# ML dependencies for activity classification
+transformers>=4.30.0
+torch>=2.0.0
+tokenizers>=0.13.0
+safetensors>=0.3.0
