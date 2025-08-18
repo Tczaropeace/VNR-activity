@@ -1,0 +1,13 @@
+*.safetensors filter=lfs diff=lfs merge=lfs -text
+*.json filter=lfs diff=lfs merge=lfs -text
+*.txt filter=lfs diff=lfs merge=lfs -text
+*.bin filter=lfs diff=lfs merge=lfs -text
+case filter=lfs diff=lfs merge=lfs -text
+are filter=lfs diff=lfs merge=lfs -text
+files filter=lfs diff=lfs merge=lfs -text
+\# filter=lfs diff=lfs merge=lfs -text
+In filter=lfs diff=lfs merge=lfs -text
+there filter=lfs diff=lfs merge=lfs -text
+other filter=lfs diff=lfs merge=lfs -text
+model filter=lfs diff=lfs merge=lfs -text
+*.pkl filter=lfs diff=lfs merge=lfs -text
