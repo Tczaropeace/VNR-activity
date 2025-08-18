@@ -64,9 +64,46 @@ def main():
         if st.button("Extract Sentences", type="primary", use_container_width=True):
             process_files()
     
-    # Show results if processing is complete
+    # STATE 1: Show extraction results if processing is complete
     if st.session_state.processing_complete and st.session_state.processing_results:
         display_results()
+        
+        # STATE 2: Show classification button if extraction done but classification not done
+        if not st.session_state.classification_complete:
+            st.markdown("### Download Options")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                excel_buffer_all = create_excel_download(st.session_state.processing_results)
+                st.download_button(
+                    label="Download All Sentences (XLSX)",
+                    data=excel_buffer_all,
+                    file_name="pdf_all_sentences.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+            
+            with col2:
+                # Try to load the activity classification model if not loaded
+                if not st.session_state.model_loaded:
+                    model, tokenizer, success = load_activity_classifier()
+                    st.session_state.model_loaded = success
+                    if success:
+                        st.session_state.model = model
+                        st.session_state.tokenizer = tokenizer
+                
+                # Show filter button only if model loaded successfully
+                if st.session_state.model_loaded:
+                    if st.button("🤖 Filter for Activities", use_container_width=True):
+                        filter_for_activities()
+                else:
+                    st.button("Filter for Activities", disabled=True, use_container_width=True)
+                    st.caption("⚠️ Activity classification model not available")
+        
+        # STATE 3: Show classification results if classification is complete
+        if st.session_state.classification_complete:
+            display_activity_results()
 
 def create_demo_files() -> List[Dict[str, Any]]:
     """Create demo file objects for testing purposes."""
@@ -193,7 +230,7 @@ def process_files():
     st.session_state.processing_complete = True
 
 def display_results():
-    """Display processing results and provide download options."""
+    """Display processing results (extraction only, not classification)."""
     results = st.session_state.processing_results
     
     st.markdown("### Extraction Results")
@@ -230,42 +267,6 @@ def display_results():
         
         df_preview = pd.DataFrame(display_data)
         st.dataframe(df_preview, use_container_width=True)
-        
-        st.markdown("### Download Options")
-        
-        # Always show download all sentences option
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            excel_buffer_all = create_excel_download(results)
-            st.download_button(
-                label="Download All Sentences (XLSX)",
-                data=excel_buffer_all,
-                file_name="pdf_all_sentences.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
-        
-        with col2:
-            # Try to load the activity classification model
-            if not st.session_state.model_loaded:
-                model, tokenizer, success = load_activity_classifier()
-                st.session_state.model_loaded = success
-                if success:
-                    st.session_state.model = model
-                    st.session_state.tokenizer = tokenizer
-            
-            # Show filter button only if model loaded successfully
-            if st.session_state.model_loaded:
-                if st.button("🤖 Filter for Activities", use_container_width=True):
-                    filter_for_activities()
-            else:
-                st.button("Filter for Activities", disabled=True, use_container_width=True)
-                st.caption("⚠️ Activity classification model not available")
-        
-        # Show classification results if available
-        if st.session_state.classification_complete:
-            display_activity_results()
 
 def filter_for_activities():
     """Filter extracted sentences for activities using the ML model."""
@@ -395,3 +396,4 @@ def create_excel_download(results: List[Dict[str, Any]]) -> bytes:
 
 if __name__ == "__main__":
     main()
+    
