@@ -20,7 +20,7 @@ st.set_page_config(
 
 def main():
     """Main Streamlit application entry point."""
-    st.title("📄 PDF Activity Extractor")
+    st.title("PDF Activity Extractor")
     st.markdown("Upload multiple PDF files to extract sentences and optionally filter for activities.")
     
     # Initialize session state
@@ -131,7 +131,7 @@ def process_files():
         processed_names.append(unique_name)
         
         # Update main status
-        status_placeholder.write(f"📝 Processing: **{unique_name}** ({i+1}/{total_files})")
+        status_placeholder.write(f"Processing: **{unique_name}** ({i+1}/{total_files})")
         
         try:
             with st.spinner(f"Extracting sentences from {unique_name}..."):
@@ -159,11 +159,11 @@ def process_files():
                     
                     if sentence_count > 0:
                         file_status_placeholder.write(
-                            f"✅ **{unique_name}**: {sentence_count} sentences extracted" + 
+                            f"**{unique_name}**: {sentence_count} sentences extracted" + 
                             (f", {error_count} errors" if error_count > 0 else "")
                         )
                     else:
-                        file_status_placeholder.write(f"⚠️ **{unique_name}**: No sentences extracted")
+                        file_status_placeholder.write(f"⚠**{unique_name}**: No sentences extracted")
                 
                 # Update progress
                 progress = (i + 1) / total_files
@@ -181,14 +181,14 @@ def process_files():
                 'error': str(e)
             }]
             results.extend(error_result)
-            file_status_placeholder.write(f"❌ **{unique_name}**: Processing failed")
+            file_status_placeholder.write(f"**{unique_name}**: Processing failed")
             
             # Update progress even on error
             progress = (i + 1) / total_files
             progress_bar.progress(progress)
     
     # Complete processing
-    status_placeholder.write("✅ **Processing Complete!**")
+    status_placeholder.write("**Processing Complete!**")
     st.session_state.processing_results = results
     st.session_state.processing_complete = True
 
@@ -261,7 +261,7 @@ def display_results():
                     filter_for_activities()
             else:
                 st.button("Filter for Activities", disabled=True, use_container_width=True)
-                st.caption("⚠️ Activity classification model not available")
+                st.caption("⚠Activity classification model not available")
         
         # Show classification results if available
         if st.session_state.classification_complete:
@@ -292,7 +292,7 @@ def filter_for_activities():
     st.session_state.classification_results = classified_results
     st.session_state.classification_complete = True
     
-    st.success(f"✅ Classification complete! Found {summary['activities']} activities out of {summary['total_sentences']} sentences ({summary['activity_percentage']:.1f}%)")
+    st.success(f"Classification complete! Found {summary['activities']} activities out of {summary['total_sentences']} sentences ({summary['activity_percentage']:.1f}%)")
 
 def display_activity_results():
     """Display activity classification results."""
