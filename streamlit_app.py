@@ -20,7 +20,7 @@ st.set_page_config(
 
 def main():
     """Main Streamlit application entry point."""
-    st.title("PDF Activity Extractor")
+    st.title("📄 PDF Activity Extractor")
     st.markdown("Upload multiple PDF files to extract sentences and optionally filter for activities.")
     
     # Initialize session state
@@ -37,34 +37,13 @@ def main():
     if 'classification_complete' not in st.session_state:
         st.session_state.classification_complete = False
     
-    # Custom CSS for drag-and-drop card
-    st.markdown("""
-    <style>
-    .upload-card {
-        border: 2px dashed #cccccc;
-        border-radius: 10px;
-        padding: 2rem;
-        text-align: center;
-        background-color: #f8f9fa;
-        margin: 1rem 0;
-        transition: border-color 0.3s ease;
-    }
-    .upload-card:hover {
-        border-color: #007bff;
-        background-color: #f0f8ff;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
     # File upload section
-    st.markdown('<div class="upload-card">', unsafe_allow_html=True)
     uploaded_files = st.file_uploader(
         "Drag and drop PDF files here or click to browse",
         type=['pdf'],
         accept_multiple_files=True,
         key="pdf_uploader"
     )
-    st.markdown('</div>', unsafe_allow_html=True)
     
     # Update session state with uploaded files
     if uploaded_files:
@@ -82,7 +61,7 @@ def main():
             st.write(f"**{file.name}** ({file_size})")
         
         # Confirm & Extract button
-        if st.button("Extract Sentences", type="primary", use_container_width=True):
+        if st.button("Confirm & Extract Sentences", type="primary", use_container_width=True):
             process_files()
     
     # Show results if processing is complete
@@ -152,7 +131,7 @@ def process_files():
         processed_names.append(unique_name)
         
         # Update main status
-        status_placeholder.write(f"Processing: **{unique_name}** ({i+1}/{total_files})")
+        status_placeholder.write(f"📝 Processing: **{unique_name}** ({i+1}/{total_files})")
         
         try:
             with st.spinner(f"Extracting sentences from {unique_name}..."):
@@ -180,11 +159,11 @@ def process_files():
                     
                     if sentence_count > 0:
                         file_status_placeholder.write(
-                            f"**{unique_name}**: {sentence_count} sentences extracted" + 
+                            f"✅ **{unique_name}**: {sentence_count} sentences extracted" + 
                             (f", {error_count} errors" if error_count > 0 else "")
                         )
                     else:
-                        file_status_placeholder.write(f"⚠**{unique_name}**: No sentences extracted")
+                        file_status_placeholder.write(f"⚠️ **{unique_name}**: No sentences extracted")
                 
                 # Update progress
                 progress = (i + 1) / total_files
@@ -202,14 +181,14 @@ def process_files():
                 'error': str(e)
             }]
             results.extend(error_result)
-            file_status_placeholder.write(f"**{unique_name}**: Processing failed")
+            file_status_placeholder.write(f"❌ **{unique_name}**: Processing failed")
             
             # Update progress even on error
             progress = (i + 1) / total_files
             progress_bar.progress(progress)
     
     # Complete processing
-    status_placeholder.write("**Processing Complete!**")
+    status_placeholder.write("✅ **Processing Complete!**")
     st.session_state.processing_results = results
     st.session_state.processing_complete = True
 
@@ -260,7 +239,7 @@ def display_results():
         with col1:
             excel_buffer_all = create_excel_download(results)
             st.download_button(
-                label="📥 Download All Sentences (XLSX)",
+                label="Download All Sentences (XLSX)",
                 data=excel_buffer_all,
                 file_name="pdf_all_sentences.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -278,11 +257,11 @@ def display_results():
             
             # Show filter button only if model loaded successfully
             if st.session_state.model_loaded:
-                if st.button("Filter for Activities", use_container_width=True):
+                if st.button("🤖 Filter for Activities", use_container_width=True):
                     filter_for_activities()
             else:
                 st.button("Filter for Activities", disabled=True, use_container_width=True)
-                st.caption("Activity classification model not available")
+                st.caption("⚠️ Activity classification model not available")
         
         # Show classification results if available
         if st.session_state.classification_complete:
@@ -313,7 +292,7 @@ def filter_for_activities():
     st.session_state.classification_results = classified_results
     st.session_state.classification_complete = True
     
-    st.success(f"Classification complete! Found {summary['activities']} activities out of {summary['total_sentences']} sentences ({summary['activity_percentage']:.1f}%)")
+    st.success(f"✅ Classification complete! Found {summary['activities']} activities out of {summary['total_sentences']} sentences ({summary['activity_percentage']:.1f}%)")
 
 def display_activity_results():
     """Display activity classification results."""
@@ -355,7 +334,7 @@ def display_activity_results():
         st.dataframe(df_activities_preview, use_container_width=True)
         
         # Provide download for activities only
-        st.markdown("### Download Activity Sentences")
+        st.markdown("### Download Activities")
         
         excel_buffer_activities = create_activity_excel(
             activities_only, 
