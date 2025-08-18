@@ -23,10 +23,10 @@ def load_activity_classifier():
         current_dir = Path(__file__).parent.parent
         model_path = current_dir / "models"
         
-        st.info("🤖 Loading activity classification model...")
+        st.info("Loading activity classification model...")
         
         if not model_path.exists():
-            st.error(f"❌ Model directory not found: {model_path}")
+            st.error(f"Model directory not found: {model_path}")
             return None, None, False
         
         # Check for required model files
@@ -34,7 +34,7 @@ def load_activity_classifier():
         missing_files = [f for f in required_files if not (model_path / f).exists()]
         
         if missing_files:
-            st.error(f"❌ Missing model files: {missing_files}")
+            st.error(f"Missing model files: {missing_files}")
             return None, None, False
         
         # Load tokenizer and model
@@ -48,7 +48,7 @@ def load_activity_classifier():
         device = torch.device('cpu')
         model.to(device)
         
-        st.success("✅ Activity classification model loaded successfully!")
+        st.success("Activity classification model loaded successfully!")
         logger.info(f"Model loaded from: {model_path}")
         logger.info(f"Using device: {device}")
         
@@ -56,7 +56,7 @@ def load_activity_classifier():
         
     except Exception as e:
         error_msg = f"Failed to load activity classification model: {str(e)}"
-        st.error(f"❌ {error_msg}")
+        st.error(f"{error_msg}")
         logger.error(error_msg)
         return None, None, False
 
@@ -106,7 +106,7 @@ def classify_sentences(sentences_data: List[Dict[str, Any]],
             batch_texts = enhanced_texts[i:i + batch_size]
             batch_num = i // batch_size + 1
             
-            status_text.text(f"🤖 Classifying batch {batch_num}/{total_batches} ({len(batch_texts)} sentences)")
+            status_text.text(f"Classifying batch {batch_num}/{total_batches} ({len(batch_texts)} sentences)")
             
             # Tokenize batch
             encodings = tokenizer(
@@ -147,7 +147,7 @@ def classify_sentences(sentences_data: List[Dict[str, Any]],
         return results
         
     except Exception as e:
-        st.error(f"❌ Classification failed: {str(e)}")
+        st.error(f"Classification failed: {str(e)}")
         logger.error(f"Classification error: {str(e)}")
         
         # Return original data with no predictions on error
@@ -252,3 +252,4 @@ def get_classification_summary(sentences_data: List[Dict[str, Any]]) -> Dict[str
         'non_activities': non_activities,
         'activity_percentage': (activities / total * 100) if total > 0 else 0
     }
+    
