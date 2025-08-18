@@ -21,10 +21,10 @@ except Exception as e:
 
 def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
     """
-    Extract sentences from PDF bytes with OCR garbage detection.
+    Extract sentences from PDF bytes with context parsing.
     
-    This implementation focuses on sentence-level extraction rather than file-level activities.
-    SENTENCE PARSING OCCURS HERE - converts PDFs into individual sentences.
+    This implementation focuses on sentence-level extraction with context support.
+    SENTENCE PARSING + CONTEXT GENERATION OCCURS HERE.
     
     Args:
         pdf_bytes: Raw PDF file bytes
@@ -37,6 +37,7 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
         - activity_text: str - the extracted sentence
         - page_number: int - page number where sentence was found
         - document_name: str - document name without extension
+        - context: str - surrounding sentences for ML prediction (internal use only)
         - error: str | None - None on success, error message on failure
     """
     try:
@@ -51,24 +52,25 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
                 'activity_text': f'Empty file: {file_name}',
                 'page_number': 1,
                 'document_name': file_name.rsplit('.', 1)[0],
+                'context': '',
                 'error': 'File is empty or could not be read'
             }]
         
         if not PDF_AVAILABLE:
             print(f"❌ PDF processing not available: {PDF_ERROR}")
-            # Return detailed error when pdfplumber not available
             return [{
                 'file_name': file_name,
                 'activity_index': 0,
                 'activity_text': f'PDF processing unavailable: {PDF_ERROR}',
                 'page_number': 1,
                 'document_name': file_name.rsplit('.', 1)[0],
+                'context': '',
                 'error': f'pdfplumber not available - {PDF_ERROR}'
             }]
         
         print("✅ pdfplumber available, starting text extraction")
         
-        # Extract text from PDF using pdfplumber (lightweight alternative to PyMuPDF)
+        # Extract text from PDF using pdfplumber
         pages_text = extract_text_with_pdfplumber(pdf_bytes)
         
         if not pages_text:
@@ -79,14 +81,14 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
                 'activity_text': f'No text found in: {file_name}',
                 'page_number': 1,
                 'document_name': file_name.rsplit('.', 1)[0],
+                'context': '',
                 'error': 'No extractable text found in PDF'
             }]
         
         print(f"✅ Extracted text from {len(pages_text)} pages")
         
-        # Process each page and extract sentences
-        all_sentences = []
-        sentence_index = 0
+        # Process each page and collect all sentences first (without context)
+        all_sentences_raw = []
         
         for page_num, page_text in enumerate(pages_text, 1):
             print(f"🔍 Processing page {page_num}, text length: {len(page_text)}")
@@ -99,42 +101,58 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
             page_is_garbage = is_ocr_garbage(page_text)
             if page_is_garbage:
                 print(f"🗑️ Entire page {page_num} appears to be OCR garbage")
-                # Still try to extract sentences, but flag them
                 
-            # Extract sentences from page text regardless of OCR garbage detection
+            # Extract sentences from page text
             sentences = extract_sentences_from_text(page_text)
             print(f"📝 Found {len(sentences)} potential sentences on page {page_num}")
             
             for sentence in sentences:
-                print(f"🔍 Evaluating sentence (length {len(sentence)}): '{sentence[:100]}...'")
-                
-                if len(sentence.strip()) < 5:  # Reduced from 10 to 5 for testing
-                    print(f"❌ Skipping short sentence: '{sentence[:50]}'")
+                if len(sentence.strip()) < 5:
                     continue
                     
-                # TEMPORARILY DISABLE GARBAGE DETECTION FOR DEBUGGING
-                # Apply sentence-level quality check
-                # sentence_is_garbage = is_sentence_garbage(sentence)
-                # 
-                # if sentence_is_garbage:
-                #     print(f"🗑️ Skipping garbage sentence: '{sentence[:50]}...'")
-                #     continue  # Skip this sentence but keep processing others
-                
-                # This is a valid sentence
-                print(f"✅ Adding valid sentence: '{sentence[:50]}...'")
-                all_sentences.append({
-                    'file_name': file_name,
-                    'activity_index': sentence_index,
-                    'activity_text': clean_sentence_text(sentence),
+                # Store raw sentence data for context processing
+                all_sentences_raw.append({
+                    'text': clean_sentence_text(sentence),
                     'page_number': page_num,
-                    'document_name': file_name.rsplit('.', 1)[0],
-                    'error': 'Possible OCR issues on page' if page_is_garbage else None
+                    'has_ocr_issues': page_is_garbage
                 })
-                sentence_index += 1
         
-        print(f"✅ Total sentences extracted: {len(all_sentences)}")
+        print(f"📋 Collected {len(all_sentences_raw)} raw sentences across all pages")
         
-        if not all_sentences:
+        # NOW ADD CONTEXT - Process sentences with context from surrounding sentences
+        all_sentences_with_context = []
+        
+        for i, sent_data in enumerate(all_sentences_raw):
+            # Get previous, current, and next sentences
+            prev_sentence = all_sentences_raw[i - 1]['text'] if i > 0 else ""
+            current_sentence = sent_data['text']
+            next_sentence = all_sentences_raw[i + 1]['text'] if i < len(all_sentences_raw) - 1 else ""
+            
+            # Create context by concatenating the three sentences
+            context_parts = []
+            if prev_sentence:
+                context_parts.append(prev_sentence)
+            context_parts.append(current_sentence)
+            if next_sentence:
+                context_parts.append(next_sentence)
+            
+            # Join context (this matches your trainer's context format)
+            context = " ".join(context_parts)
+            
+            # Create final sentence entry with context
+            all_sentences_with_context.append({
+                'file_name': file_name,
+                'activity_index': i,
+                'activity_text': current_sentence,
+                'page_number': sent_data['page_number'],
+                'document_name': file_name.rsplit('.', 1)[0],
+                'context': clean_sentence_text(context),  # Clean context for ML use
+                'error': 'Possible OCR issues on page' if sent_data['has_ocr_issues'] else None
+            })
+        
+        print(f"✅ Total sentences with context: {len(all_sentences_with_context)}")
+        
+        if not all_sentences_with_context:
             print("❌ No valid sentences found")
             return [{
                 'file_name': file_name,
@@ -142,26 +160,27 @@ def parse_pdf_bytes(pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
                 'activity_text': f'No valid sentences found in: {file_name}',
                 'page_number': 1,
                 'document_name': file_name.rsplit('.', 1)[0],
+                'context': '',
                 'error': 'No valid sentences could be extracted'
             }]
         
-        return all_sentences
+        return all_sentences_with_context
         
     except Exception as e:
         print(f"❌ Parsing failed for {file_name}: {str(e)}")
-        # Return error sentence on any exception
         return [{
             'file_name': file_name,
             'activity_index': 0,
             'activity_text': f'Failed to parse: {file_name}',
             'page_number': 1,
             'document_name': file_name.rsplit('.', 1)[0],
+            'context': '',
             'error': f'Parsing error: {str(e)}'
         }]
 
 def extract_text_with_pdfplumber(pdf_bytes: bytes) -> List[str]:
     """
-    Extract text from PDF using pdfplumber (lightweight alternative to PyMuPDF).
+    Extract text from PDF using pdfplumber.
     
     Returns:
         List of strings, one per page
@@ -212,53 +231,9 @@ def extract_text_with_pdfplumber(pdf_bytes: bytes) -> List[str]:
         print(f"❌ PDF extraction failed: {str(e)}")
         raise Exception(f"PDF extraction failed: {str(e)}")
 
-def is_sentence_garbage(sentence: str) -> bool:
-    """
-    Lightweight sentence-level garbage detection.
-    
-    Filters out obviously corrupted individual sentences while preserving
-    most valid content. Much more conservative than page-level detection.
-    
-    Args:
-        sentence: Individual sentence to check
-        
-    Returns:
-        bool: True if this specific sentence appears to be garbage
-    """
-    if not sentence or len(sentence.strip()) < 5:
-        return True
-    
-    clean_sentence = sentence.lower().strip()
-    
-    # Very conservative checks for individual sentences
-    
-    # Check 1: Sentence is mostly non-alphabetic characters
-    alpha_chars = sum(1 for c in clean_sentence if c.isalpha())
-    total_chars = len(clean_sentence.replace(' ', ''))
-    if total_chars > 10 and alpha_chars / total_chars < 0.3:
-        return True
-    
-    # Check 2: Sentence has extreme consonant clusters (8+ consecutive)
-    extreme_consonants = re.findall(r'[bcdfghjklmnpqrstvwxyz]{8,}', clean_sentence)
-    if len(extreme_consonants) > 0:
-        return True
-    
-    # Check 3: Sentence is mostly repeated characters
-    if len(set(clean_sentence.replace(' ', ''))) < 3 and len(clean_sentence) > 10:
-        return True
-    
-    # Check 4: Sentence has no vowels at all (very rare in real text)
-    if alpha_chars > 5 and not any(c in 'aeiou' for c in clean_sentence):
-        return True
-    
-    return False  # Default to keeping sentences
-
 def is_ocr_garbage(text: str) -> bool:
     """
-    Much more conservative OCR garbage detection.
-    
-    Only flags extremely obvious OCR garbage to avoid dismissing valid content.
-    Uses very strict thresholds to minimize false positives.
+    Conservative OCR garbage detection.
     
     Args:
         text: Text to check for OCR garbage
@@ -266,23 +241,23 @@ def is_ocr_garbage(text: str) -> bool:
     Returns:
         bool: True only if text is very obviously OCR garbage
     """
-    if not text or len(text.strip()) < 50:  # Increased minimum length
+    if not text or len(text.strip()) < 50:
         return False
     
     # Convert to lowercase for analysis
     clean_text = text.lower().strip()
     
-    # Much more conservative heuristics - only flag extreme cases
+    # Conservative heuristics - only flag extreme cases
     
-    # Heuristic 1: Extremely long consonant runs (10+ chars) - very rare in real text
+    # Heuristic 1: Extremely long consonant runs (10+ chars)
     extreme_consonant_runs = re.findall(r'[bcdfghjklmnpqrstvwxyz]{10,}', clean_text)
-    if len(extreme_consonant_runs) > 1:  # Allow one, flag if multiple
+    if len(extreme_consonant_runs) > 1:
         return True
     
-    # Heuristic 2: Very low alphabetic ratio (< 40%) - most text is at least 40% letters
+    # Heuristic 2: Very low alphabetic ratio (< 40%)
     alpha_chars = sum(1 for c in clean_text if c.isalpha())
     total_chars = len(clean_text.replace(' ', ''))
-    if total_chars > 100 and alpha_chars / total_chars < 0.4:  # More lenient threshold
+    if total_chars > 100 and alpha_chars / total_chars < 0.4:
         return True
     
     # Heuristic 3: Extremely high ratio of numbers/symbols (> 70%)
@@ -290,18 +265,16 @@ def is_ocr_garbage(text: str) -> bool:
     if len(clean_text) > 100 and non_alpha_non_space / len(clean_text) > 0.7:
         return True
     
-    # Heuristic 4: Almost no vowels at all (< 8%) - real text always has vowels
+    # Heuristic 4: Almost no vowels at all (< 8%)
     vowels = sum(1 for c in clean_text if c in 'aeiou')
-    if alpha_chars > 100 and vowels / alpha_chars < 0.08:  # Much more lenient
+    if alpha_chars > 100 and vowels / alpha_chars < 0.08:
         return True
     
-    return False  # Default to keeping text
+    return False
 
 def extract_sentences_from_text(text: str) -> List[str]:
     """
     Extract individual sentences from page text with robust cleaning and normalization.
-    
-    Handles common edge cases like abbreviations, numbers, and decimal points.
     
     Args:
         text: Raw text from PDF page
@@ -321,12 +294,12 @@ def extract_sentences_from_text(text: str) -> List[str]:
     except:
         pass
     
-    # Clean whitespace and line breaks (more conservative)
-    text = re.sub(r'[ \t]+', ' ', text)  # Multiple spaces/tabs to single space
-    text = re.sub(r'\r\n|\r', '\n', text)  # Normalize line endings
-    text = re.sub(r'\n{4,}', '\n\n\n', text)  # Limit excessive line breaks but keep some
+    # Clean whitespace and line breaks
+    text = re.sub(r'[ \t]+', ' ', text)
+    text = re.sub(r'\r\n|\r', '\n', text)
+    text = re.sub(r'\n{4,}', '\n\n\n', text)
     
-    # Comprehensive protection of periods that shouldn't end sentences
+    # Protect periods that shouldn't end sentences
     
     # 1. Common abbreviations
     abbreviations = [
@@ -337,11 +310,10 @@ def extract_sentences_from_text(text: str) -> List[str]:
     for abbr in abbreviations:
         text = re.sub(rf'\b{abbr}\. ', f'{abbr}DOTPLACEHOLDER ', text, flags=re.IGNORECASE)
     
-    # 2. Numbers with decimals - comprehensive patterns
-    # Simple decimals: 1.5, 3.14, 0.75, etc.
+    # 2. Numbers with decimals
     text = re.sub(r'\b(\d+)\.(\d+)\b', r'\1DECIMALDOT\2', text)
     
-    # Decimals followed by common units/words
+    # 3. Decimal numbers with units
     decimal_units = [
         'million', 'billion', 'trillion', 'thousand', 'hundred',
         'percent', '%', 'degrees', 'inches', 'feet', 'yards', 'miles', 'km', 'meters',
@@ -350,58 +322,42 @@ def extract_sentences_from_text(text: str) -> List[str]:
         'dollars', 'cents', 'euros', 'pounds'
     ]
     for unit in decimal_units:
-        # Handle patterns like "1.5 million", "3.14 percent", etc.
         text = re.sub(rf'\b(\d+)DECIMALDOT(\d+)\s+{unit}\b', rf'\1DECIMALDOT\2 {unit}', text, flags=re.IGNORECASE)
     
-    # 3. Ordinal numbers: 1st, 2nd, 3rd, etc. (though these use . less commonly)
-    text = re.sub(r'\b(\d+)(st|nd|rd|th)\.', r'\1\2DOTPLACEHOLDER', text)
-    
-    # 4. Time formats: 1.30 PM, 14.45, etc.
+    # 4. Time formats and version numbers
     text = re.sub(r'\b(\d{1,2})\.(\d{2})\s*(AM|PM|am|pm)\b', r'\1DECIMALDOT\2 \3', text)
-    
-    # 5. Version numbers: v1.5, version 2.3, etc.
     text = re.sub(r'\b(v|version)\s*(\d+)\.(\d+)', r'\1 \2DECIMALDOT\3', text, flags=re.IGNORECASE)
     
-    # 6. Dates in some formats: 1.5.2023, etc. (though less common)
-    text = re.sub(r'\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b', r'\1DECIMALDOT\2DECIMALDOT\3', text)
-    
-    # Now split into potential sentences - improved regex
+    # Split into sentences
     print(f"🔄 Splitting text into sentences...")
     sentence_boundaries = re.split(r'[.!?]+(?=\s|\n|$)', text)
     print(f"📊 Found {len(sentence_boundaries)} potential sentence boundaries")
     
     sentences = []
     for i, potential_sentence in enumerate(sentence_boundaries):
-        print(f"🔍 Processing boundary {i+1}: '{potential_sentence[:50]}...'")
-        
         if not potential_sentence.strip():
-            print(f"❌ Empty boundary {i+1}, skipping")
             continue
             
-        # Restore all the protected periods
+        # Restore protected periods
         sentence = potential_sentence.replace('DOTPLACEHOLDER', '.')
         sentence = sentence.replace('DECIMALDOT', '.')
         sentence = sentence.strip()
         
-        if len(sentence) < 5:  # Skip very short fragments
-            print(f"❌ Boundary {i+1} too short ({len(sentence)} chars): '{sentence}'")
+        if len(sentence) < 5:
             continue
             
-        # Handle sentences that might be missing punctuation
+        # Add punctuation if missing
         if sentence and sentence[-1] not in '.!?':
             sentence += '.'
             
-        print(f"✅ Valid sentence {i+1}: '{sentence[:50]}...'")
         sentences.append(sentence)
     
-    # Additional split for sentences separated by multiple line breaks
-    print(f"🔄 Processing {len(sentences)} sentences for line break handling...")
+    # Handle paragraph breaks
     additional_sentences = []
     for sentence in sentences:
-        # Split on double line breaks (paragraph boundaries)
         parts = sentence.split('\n\n')
         for part in parts:
-            part = part.replace('\n', ' ').strip()  # Join line-broken sentences
+            part = part.replace('\n', ' ').strip()
             if len(part) >= 5:
                 if part[-1] not in '.!?':
                     part += '.'
@@ -409,32 +365,28 @@ def extract_sentences_from_text(text: str) -> List[str]:
     
     print(f"✅ Final sentence extraction complete: {len(additional_sentences)} sentences")
     
-    # Show first few sentences for debugging
-    for i, sent in enumerate(additional_sentences[:3]):
-        print(f"📄 Sample sentence {i+1}: '{sent[:80]}...'")
-    
     return additional_sentences
 
 def clean_sentence_text(sentence: str) -> str:
     """
-    Clean sentence text for CSV output and remove problematic characters.
+    Clean sentence text for CSV output and ML processing.
     
     Args:
         sentence: Raw sentence text
         
     Returns:
-        Cleaned sentence text safe for CSV output
+        Cleaned sentence text
     """
     if not isinstance(sentence, str):
         sentence = str(sentence)
     
-    # Remove control characters that can break CSV
+    # Remove control characters
     sentence = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', sentence)
     
     # Normalize whitespace
     sentence = re.sub(r'\s+', ' ', sentence.strip())
     
-    # Truncate if too long (prevent Excel issues)
+    # Truncate if too long
     max_length = 32000
     if len(sentence) > max_length:
         sentence = sentence[:max_length] + "... [TRUNCATED]"
@@ -451,7 +403,7 @@ def validate_sentence_structure(sentence_dict: Dict[str, Any]) -> bool:
     Returns:
         bool: True if valid, False otherwise
     """
-    required_keys = {'file_name', 'activity_index', 'activity_text', 'page_number', 'document_name', 'error'}
+    required_keys = {'file_name', 'activity_index', 'activity_text', 'page_number', 'document_name', 'context', 'error'}
     
     if not isinstance(sentence_dict, dict):
         return False
@@ -460,23 +412,10 @@ def validate_sentence_structure(sentence_dict: Dict[str, Any]) -> bool:
         return False
     
     # Type checking
-    if not isinstance(sentence_dict['file_name'], str):
-        return False
-    
-    if not isinstance(sentence_dict['activity_index'], int):
-        return False
-    
-    if not isinstance(sentence_dict['activity_text'], str):
-        return False
-    
-    if not isinstance(sentence_dict['page_number'], int):
-        return False
-    
-    if not isinstance(sentence_dict['document_name'], str):
-        return False
-    
-    if sentence_dict['error'] is not None and not isinstance(sentence_dict['error'], str):
-        return False
-    
-    return True
-    
+    return (isinstance(sentence_dict['file_name'], str) and
+            isinstance(sentence_dict['activity_index'], int) and
+            isinstance(sentence_dict['activity_text'], str) and
+            isinstance(sentence_dict['page_number'], int) and
+            isinstance(sentence_dict['document_name'], str) and
+            isinstance(sentence_dict['context'], str) and
+            (sentence_dict['error'] is None or isinstance(sentence_dict['error'], str)))
